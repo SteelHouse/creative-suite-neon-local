@@ -73,6 +73,12 @@ class NeonAPI:
                     print(f"Warning: Database {database.get('name', 'unknown')} missing name or owner, skipping")
                     continue
                 
+                # Filter out Prisma shadow databases
+                db_name = database["name"].lower()
+                if "prisma_migrate_shadow" in db_name:
+                    print(f"Filtering out Prisma shadow database: {database['name']}")
+                    continue
+                
                 databases.append({
                     "database": database["name"],
                     "user": database["owner_name"]
