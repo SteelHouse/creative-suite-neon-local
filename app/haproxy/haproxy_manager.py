@@ -68,12 +68,6 @@ class HAProxyManager(ProcessManager):
 
         print(f"Databases: {databases}")
         
-        # Print database entries without sensitive info
-        print("=== Database Entries (sanitized) ===")
-        for i, db in enumerate(databases):
-            print(f"Database {i+1}: {db['database']} -> {db['host']}:443 (user: ***, password: ***)")
-        print("=== Full Database Entries ===")
-        
         # Determine application name and user agent suffix based on CLIENT environment variable
         client = os.getenv("CLIENT", "").lower()
         app_name = "neon_local_vscode_container" if client == "vscode" else "neon_local_container"
