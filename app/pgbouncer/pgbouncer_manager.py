@@ -113,10 +113,6 @@ class PgBouncerManager(ProcessManager):
             entry = f"{db['database']}=user={db['user']} password={db['password']} host={db['host']} port=5432 dbname={db['database']} application_name={app_name}"
             database_entries.append(entry)
 
-        # Print database entries without sensitive info
-        print("=== Database Entries (sanitized) ===")
-        for i, db in enumerate(databases):
-            print(f"Database {i+1}: {db['database']} -> {db['host']}:5432 (user: ***, password: ***)")
         
         # Only add wildcard entry if explicitly requested (for backward compatibility)
         # This can cause issues with Prisma migrations where shadow databases get routed to the same database
