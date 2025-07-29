@@ -202,6 +202,11 @@ class NeonAPI:
         if not self.api_key or not self.project_id:
             raise ValueError("NEON_API_KEY or NEON_PROJECT_ID not set.")
 
+        # Special handling for main branch - map to devtest branch
+        if current_branch == "main":
+            print(f"Mapping main branch to devtest branch")
+            current_branch = "devtest"
+
         branch_id = None
         if current_branch and current_branch in state:
             try:
