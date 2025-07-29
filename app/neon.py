@@ -8,7 +8,7 @@ class NeonAPI:
     def __init__(self):
         self.api_key = os.getenv("NEON_API_KEY")
         self.project_id = os.getenv("NEON_PROJECT_ID")
-        self.reuse_branch_name = os.getenv("REUSE_BRANCH_NAME", "false").lower() == "true"
+        self.reuse_existing_branches = os.getenv("REUSE_EXISTING_BRANCHES", "false").lower() == "true"
 
     def _headers(self):
         # Determine user agent based on CLIENT environment variable
@@ -180,8 +180,8 @@ class NeonAPI:
             # Get all existing branch names
             existing_names = {branch.get("name") for branch in branches if branch.get("name")}
             
-            # If reuse_branch_name is True, check if a branch with the exact name exists
-            if self.reuse_branch_name and base_name in existing_names:
+            # If reuse_existing_branches is True, check if a branch with the exact name exists
+            if self.reuse_existing_branches and base_name in existing_names:
                 # Find the existing branch with this name
                 for branch in branches:
                     if branch.get("name") == base_name:
