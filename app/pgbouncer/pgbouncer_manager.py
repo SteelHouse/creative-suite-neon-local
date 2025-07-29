@@ -112,6 +112,13 @@ class PgBouncerManager(ProcessManager):
         for db in databases:
             entry = f"{db['database']}=user={db['user']} password={db['password']} host={db['host']} port=5432 dbname={db['database']} application_name={app_name}"
             database_entries.append(entry)
+
+        # Print database entries without sensitive info
+        print("=== Database Entries (sanitized) ===")
+        for i, db in enumerate(databases):
+            print(f"Database {i+1}: {db['database']} -> {db['host']}:5432 (user: ***, password: ***)")
+        print("=== Full Database Entries ===")
+        print(database_entries)
         
         # Add wildcard entry pointing to the first database
         if databases:
