@@ -120,11 +120,13 @@ class PgBouncerManager(ProcessManager):
         print("=== Full Database Entries ===")
         print(database_entries)
         
-        # Add wildcard entry pointing to the first database
-        if databases:
+        # Only add wildcard entry if explicitly requested (for backward compatibility)
+        # This can cause issues with Prisma migrations where shadow databases get routed to the same database
+        if os.getenv("ENABLE_WILDCARD_ROUTING", "false").lower() == "true" and databases:
             first_db = databases[0]
             wildcard_entry = f"*=user={first_db['user']} password={first_db['password']} host={first_db['host']} port=5432 dbname={first_db['database']} application_name={app_name}"
             database_entries.append(wildcard_entry)
+            print("Warning: Wildcard routing enabled - this may cause issues with Prisma migrations")
         
         # Combine all sections
         config = f"[databases]\n" + "\n".join(database_entries) + "\n\n[pgbouncer]\n" + pgbouncer_section
