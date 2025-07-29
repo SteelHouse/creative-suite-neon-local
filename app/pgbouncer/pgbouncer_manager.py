@@ -117,8 +117,6 @@ class PgBouncerManager(ProcessManager):
         print("=== Database Entries (sanitized) ===")
         for i, db in enumerate(databases):
             print(f"Database {i+1}: {db['database']} -> {db['host']}:5432 (user: ***, password: ***)")
-        print("=== Full Database Entries ===")
-        print(database_entries)
         
         # Only add wildcard entry if explicitly requested (for backward compatibility)
         # This can cause issues with Prisma migrations where shadow databases get routed to the same database
