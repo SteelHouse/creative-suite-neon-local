@@ -128,14 +128,6 @@ class PgBouncerManager(ProcessManager):
             database_entries.append(wildcard_entry)
             print("Warning: Wildcard routing enabled - this may cause issues with Prisma migrations")
         
-        # Add shadow database routing for Prisma migrations
-        if databases:
-            first_db = databases[0]
-            # Route Prisma shadow databases to a dedicated shadow database
-            shadow_entry = f"prisma_migrate_shadow_*=user={first_db['user']} password={first_db['password']} host={first_db['host']} port=5432 dbname=prisma_shadow application_name={app_name}"
-            database_entries.append(shadow_entry)
-            print("Added shadow database routing: prisma_migrate_shadow_* -> prisma_shadow")
-        
         # Combine all sections
         config = f"[databases]\n" + "\n".join(database_entries) + "\n\n[pgbouncer]\n" + pgbouncer_section
         
