@@ -110,7 +110,7 @@ class PgBouncerManager(ProcessManager):
         # Generate database entries for each database
         database_entries = []
         for db in databases:
-            entry = f"{db['database']}=user={db['user']} password={db['password']} host={db['host']} port=5432 dbname={db['database']} application_name={app_name} sslmode=require channel_binding=require"
+            entry = f"{db['database']}=user={db['user']} password={db['password']} host={db['host']} port=5432 dbname={db['database']} application_name={app_name}"
             database_entries.append(entry)
 
         # Print database entries without sensitive info
@@ -120,21 +120,10 @@ class PgBouncerManager(ProcessManager):
         print("=== Full Database Entries ===")
         print(database_entries)
         
-        # Log proxy routing information
-        print("=== PROXY ROUTING INFO ===")
-        print(f"PgBouncer listening on: 0.0.0.0:5432")
-        print(f"Your app should connect to: localhost:5432")
-        print("Proxy will route connections to:")
-        for i, db in enumerate(databases):
-            print(f"  {db['database']} -> {db['host']}:5432")
-        if databases:
-            print(f"  * (wildcard) -> {databases[0]['host']}:5432")
-        print("=== END PROXY ROUTING INFO ===")
-        
         # Add wildcard entry pointing to the first database
         if databases:
             first_db = databases[0]
-            wildcard_entry = f"*=user={first_db['user']} password={first_db['password']} host={first_db['host']} port=5432 dbname={first_db['database']} application_name={app_name} sslmode=require channel_binding=require"
+            wildcard_entry = f"*=user={first_db['user']} password={first_db['password']} host={first_db['host']} port=5432 dbname={first_db['database']} application_name={app_name}"
             database_entries.append(wildcard_entry)
         
         # Combine all sections
