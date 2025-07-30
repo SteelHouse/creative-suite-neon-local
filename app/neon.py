@@ -8,6 +8,7 @@ class NeonAPI:
     def __init__(self):
         self.api_key = os.getenv("NEON_API_KEY")
         self.project_id = os.getenv("NEON_PROJECT_ID")
+        self.reuse_existing_branches = os.getenv("REUSE_EXISTING_BRANCHES", "false").lower() == "true"
 
     def _headers(self):
         # Determine user agent based on CLIENT environment variable
@@ -71,7 +72,7 @@ class NeonAPI:
                 if not database.get("name") or not database.get("owner_name"):
                     print(f"Warning: Database {database.get('name', 'unknown')} missing name or owner, skipping")
                     continue
-                
+
                 databases.append({
                     "database": database["name"],
                     "user": database["owner_name"]
@@ -173,16 +174,24 @@ class NeonAPI:
             # Get all existing branch names
             existing_names = {branch.get("name") for branch in branches if branch.get("name")}
             
+            # If reuse_existing_branches is True, check if a branch with the exact name exists
+            if self.reuse_existing_branches and base_name in existing_names:
+                # Find the existing branch with this name
+                for branch in branches:
+                    if branch.get("name") == base_name:
+                        print(f"Reusing existing branch '{base_name}' with ID: {branch.get('id')}")
+                        return base_name, branch.get("id")
+            
             # If base name is available, use it
             if base_name not in existing_names:
-                return base_name
+                return base_name, None
             
             # Try appending numbers until we find an available name
             counter = 2
             while True:
                 new_name = f"{base_name}_{counter}"
                 if new_name not in existing_names:
-                    return new_name
+                    return new_name, None
                 counter += 1
                 
         except requests.exceptions.RequestException as e:
@@ -192,6 +201,11 @@ class NeonAPI:
     def fetch_or_create_branch(self, state, current_branch, parent_branch_id=None, vscode=False):
         if not self.api_key or not self.project_id:
             raise ValueError("NEON_API_KEY or NEON_PROJECT_ID not set.")
+
+        # Special handling for main branch - map to devtest branch
+        if current_branch == "main":
+            print(f"Mapping main branch to devtest branch")
+            current_branch = "devtest"
 
         branch_id = None
         if current_branch and current_branch in state:
@@ -207,30 +221,37 @@ class NeonAPI:
         if branch_id is None:
             try:
                 # Get an available branch name
-                branch_name = self._get_available_branch_name(current_branch) if current_branch else None
-                if branch_name != current_branch:
+                branch_name, existing_branch_id = self._get_available_branch_name(current_branch) if current_branch else (None, None)
+                
+                # If we found an existing branch to reuse, use its ID
+                if existing_branch_id:
+                    branch_id = existing_branch_id
+                    print(f"Reusing existing branch '{branch_name}' with ID: {branch_id}")
+                elif branch_name != current_branch:
                     print(f"Branch name '{current_branch}' already exists, using '{branch_name}' instead")
                 
-                # Create new branch
-                payload = {
-                    "annotation_value": {"neon_local": "true"},
-                    "endpoints": [{"type": "read_write"}]
-                }
+                # Only create a new branch if we don't have an existing branch ID
+                if branch_id is None:
+                    # Create new branch
+                    payload = {
+                        "annotation_value": {"neon_local": "true"},
+                        "endpoints": [{"type": "read_write"}]
+                    }
 
-                if parent_branch_id or branch_name:
-                    payload["branch"] = {}
-                    if parent_branch_id:
-                        payload["branch"]["parent_id"] = parent_branch_id
-                    if branch_name:
-                        payload["branch"]["name"] = branch_name
-                if vscode:
-                    payload["annotation_value"]["vscode"] = "true"
+                    if parent_branch_id or branch_name:
+                        payload["branch"] = {}
+                        if parent_branch_id:
+                            payload["branch"]["parent_id"] = parent_branch_id
+                        if branch_name:
+                            payload["branch"]["name"] = branch_name
+                    if vscode:
+                        payload["annotation_value"]["vscode"] = "true"
 
-                response = requests.post(f"{API_URL}/projects/{self.project_id}/branches",
-                                         headers=self._headers(), json=payload)
-                response.raise_for_status()
-                json_response = response.json()
-                branch_id = json_response["branch"]["id"]
+                    response = requests.post(f"{API_URL}/projects/{self.project_id}/branches",
+                                             headers=self._headers(), json=payload)
+                    response.raise_for_status()
+                    json_response = response.json()
+                    branch_id = json_response["branch"]["id"]
                 
             except requests.exceptions.RequestException as e:
                 print(f"Error creating branch: {str(e)}")
