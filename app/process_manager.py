@@ -145,6 +145,13 @@ class ProcessManager:
             )
             # If the command returns empty output, the branch doesn't exist
             return not result.stdout.strip()
+        except FileNotFoundError:
+            print(f"Git command not available. Skipping branch deletion check for '{branch_name}'")
+            # If Git isn't available, assume branch wasn't deleted to be safe
+            return False
+        except subprocess.TimeoutExpired:
+            print(f"Git command timed out. Skipping branch deletion check for '{branch_name}'")
+            return False
         except Exception as e:
             print(f"Error checking if branch '{branch_name}' was deleted: {str(e)}")
             # If we can't determine, assume it wasn't deleted to be safe
