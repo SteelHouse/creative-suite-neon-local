@@ -15,9 +15,6 @@ class ProcessManager:
         self.reloader_thread = None
         self.neon = NeonAPI()
         
-        # Track previous branch for deletion detection
-        self.previous_branch = None
-        
         # Get and validate required environment variables
         self.project_id = os.getenv("NEON_PROJECT_ID")
         if not self.project_id:
@@ -46,10 +43,6 @@ class ProcessManager:
                 if current_hash != last_hash:
                     print("File changed. Triggering reload...")
                     last_hash = current_hash
-                    
-                    # Check for branch deletion
-                    self._check_branch_deletion()
-                    
                     with self.reload_lock:
                         self.reload_needed = True
                     with self.config_cv:
@@ -57,58 +50,7 @@ class ProcessManager:
             except Exception as e:
                 print(f"Error watching file: {e}")
 
-    def _check_branch_deletion(self):
-        """Check if a branch was deleted and clean up the corresponding Neon branch"""
-        current_branch = self._get_git_branch()
-        
-        # Skip if this is the first run or no previous branch
-        if self.previous_branch is None:
-            self.previous_branch = current_branch
-            return
-            
-        # If we switched to a different branch, check if the previous branch was deleted
-        if current_branch != self.previous_branch:
-            # Check if the previous branch still exists in git
-            if self.previous_branch and self.previous_branch != "main":
-                if not self._branch_exists_in_git(self.previous_branch):
-                    print(f"Branch '{self.previous_branch}' was deleted. Cleaning up Neon branch...")
-                    self._cleanup_deleted_branch(self.previous_branch)
-                else:
-                    print(f"Switched from branch '{self.previous_branch}' to '{current_branch}' (branch still exists)")
-            elif self.previous_branch == "main":
-                print(f"Switched from main branch to '{current_branch}'")
-            
-            # Update the previous branch
-            self.previous_branch = current_branch
-
-    def _branch_exists_in_git(self, branch_name):
-        """Check if a branch exists in git"""
-        try:
-            # Check if the branch exists in the git refs
-            ref_path = f"/tmp/.git/refs/heads/{branch_name}"
-            return os.path.exists(ref_path)
-        except Exception as e:
-            print(f"Error checking if branch {branch_name} exists: {e}")
-            return False
-
-    def _cleanup_deleted_branch(self, branch_name):
-        """Clean up the Neon branch for a deleted git branch"""
-        try:
-            state = self._get_neon_branch()
-            if branch_name in state:
-                print(f"Cleaning up Neon branch for deleted git branch: {branch_name}")
-                # Use the existing cleanup_branch method
-                updated_state = self.neon.cleanup_branch(state, branch_name)
-                self._write_neon_branch(updated_state)
-                print(f"Successfully cleaned up Neon branch for: {branch_name}")
-            else:
-                print(f"No Neon branch state found for: {branch_name}")
-        except Exception as e:
-            print(f"Error cleaning up Neon branch for {branch_name}: {e}")
-
     def start_reloader_loop(self):
-        # Initialize previous_branch on startup
-        self.previous_branch = self._get_git_branch()
         self.start_process()
         while not self.shutdown_event.is_set():
             with self.config_cv:
@@ -187,8 +129,6 @@ class ProcessManager:
     def cleanup(self):
         if self.delete_branch:
             self.branch_cleanup()
-            # Also check for any deleted branches on shutdown
-            self._check_deleted_branches_on_shutdown()
         self.shutdown_event.set()
         with self.config_cv:
             self.config_cv.notify_all()
@@ -197,18 +137,3 @@ class ProcessManager:
         if self.reloader_thread:
             self.reloader_thread.join()
         print("Cleanup complete.")
-
-    def _check_deleted_branches_on_shutdown(self):
-        """Check for any deleted branches when shutting down"""
-        try:
-            state = self._get_neon_branch()
-            current_branch = self._get_git_branch()
-            
-            # Check all branches in state that are not the current branch and not main
-            for branch_name in list(state.keys()):
-                if branch_name != current_branch and branch_name != "main":
-                    if not self._branch_exists_in_git(branch_name):
-                        print(f"Found deleted branch '{branch_name}' during shutdown cleanup")
-                        self._cleanup_deleted_branch(branch_name)
-        except Exception as e:
-            print(f"Error during shutdown branch cleanup: {e}")
