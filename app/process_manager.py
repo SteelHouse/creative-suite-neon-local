@@ -3,6 +3,7 @@ import hashlib
 import time
 import os
 import json
+import subprocess
 from app.neon import NeonAPI
 
 class ProcessManager:
@@ -35,11 +36,14 @@ class ProcessManager:
 
     def watch_file_changes(self, file_path):
         last_hash = self.calculate_file_hash(file_path)
+        last_branch = self._get_git_branch()
         print(f"Watching {file_path} for changes...")
         while not self.shutdown_event.is_set():
             time.sleep(1)
             try:
                 current_hash = self.calculate_file_hash(file_path)
+                current_branch = self._get_git_branch()
+                
                 if current_hash != last_hash:
                     print("File changed. Triggering reload...")
                     last_hash = current_hash
@@ -47,6 +51,17 @@ class ProcessManager:
                         self.reload_needed = True
                     with self.config_cv:
                         self.config_cv.notify()
+                
+                # Check if branch was deleted (branch changed to None or different branch)
+                if last_branch and last_branch != current_branch:
+                    print(f"Branch changed from '{last_branch}' to '{current_branch}'. Checking if previous branch was deleted...")
+                    if self._is_branch_deleted(last_branch):
+                        print(f"Branch '{last_branch}' was deleted. Triggering cleanup...")
+                        self._check_branch_cleanup(last_branch)
+                    else:
+                        print(f"Branch '{last_branch}' still exists. No cleanup needed.")
+                    last_branch = current_branch
+                    
             except Exception as e:
                 print(f"Error watching file: {e}")
 
@@ -81,12 +96,59 @@ class ProcessManager:
         print(state)
         self._write_neon_branch(state)
 
+    def _check_branch_cleanup(self, deleted_branch):
+        """Check if a deleted branch should trigger Neon branch cleanup"""
+        if not self.delete_branch:
+            print(f"Branch deletion cleanup disabled. Skipping cleanup for '{deleted_branch}'")
+            return
+            
+        # Don't clean up main branch since it maps to devtest
+        if deleted_branch == "main":
+            print(f"Skipping cleanup for main branch (maps to devtest environment)")
+            return
+            
+        print(f"Checking if Neon branch should be cleaned up for deleted Git branch '{deleted_branch}'")
+        
+        # Get current state
+        state = self._get_neon_branch()
+        
+        # Check if the deleted branch exists in our state
+        if deleted_branch in state:
+            print(f"Found Neon branch state for deleted Git branch '{deleted_branch}'. Cleaning up...")
+            
+            # Clean up the Neon branch
+            try:
+                updated_state = self.neon.cleanup_branch(state, deleted_branch)
+                self._write_neon_branch(updated_state)
+                print(f"Successfully cleaned up Neon branch for '{deleted_branch}'")
+            except Exception as e:
+                print(f"Error cleaning up Neon branch for '{deleted_branch}': {str(e)}")
+        else:
+            print(f"No Neon branch state found for deleted Git branch '{deleted_branch}'. No cleanup needed.")
+
     def _get_git_branch(self):
         try:
             with open("/tmp/.git/HEAD", "r") as file:
                 return file.read().split(":", 1)[1].split("/", 2)[-1].strip()
         except:
             return None
+
+    def _is_branch_deleted(self, branch_name):
+        """Check if a Git branch was actually deleted"""
+        try:
+            # Check if the branch still exists in Git
+            result = subprocess.run(
+                ["git", "branch", "--list", branch_name],
+                capture_output=True,
+                text=True,
+                cwd="/tmp"  # Assuming Git repo is mounted at /tmp
+            )
+            # If the command returns empty output, the branch doesn't exist
+            return not result.stdout.strip()
+        except Exception as e:
+            print(f"Error checking if branch '{branch_name}' was deleted: {str(e)}")
+            # If we can't determine, assume it wasn't deleted to be safe
+            return False
         
     def _get_neon_branch(self):
         try:
