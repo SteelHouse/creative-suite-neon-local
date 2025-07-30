@@ -2,8 +2,8 @@ FROM edoburu/pgbouncer:latest
 
 USER root
 
-# Install HAProxy, Python, OpenSSL, and Git
-RUN apk add --no-cache haproxy python3 py3-requests openssl git
+# Install HAProxy, Python, and OpenSSL
+RUN apk add --no-cache haproxy python3 py3-requests openssl
 
 # PgBouncer config
 COPY /pgbouncer/userlist.txt /etc/pgbouncer/userlist.txt
